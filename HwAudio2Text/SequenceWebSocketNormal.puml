@@ -1,8 +1,5 @@
-序列图： 录音中webSocket意外断开
-问题：意外断开后没有重连，后续数据都没发出去
+序列图： webSocket正常收发
 
-Pink: audio recording
-Red: data sending
 
 @startuml
 actor User
@@ -10,14 +7,14 @@ participant App
 participant AudioSdk as Sdk
 participant AudioServer as Server
 
-activate App
-App -> App: initSdk \nsetCookie
-deactivate App
+App -> App: initSdk
+App -> App: setCookie
 
 User -> App: pushToTalk
+activate App
 App -> Sdk: apiRealTimeRecord
 
-activate Sdk #Pink
+activate Sdk
 Sdk -> Sdk: beginRecord
 Sdk -> Server: connectWebSocket
 Server --> Sdk: connected
@@ -36,16 +33,26 @@ Sdk -> Server: sendData
 end
 
 ... RECORDING ...
-' 问题：webSocket意外断开没有retry连接，后续录音一直都没有发出去
-Server -> Sdk: webSocketClosed(link broken!)
-deactivate Sdk
-'webSocket disconnect
-Sdk -> App: callback("", FINISH)
-
-... RECORDING ...
 User -> App: releaseEndTalk
 App -> Sdk: apiStopRecord
+deactivate App
 Sdk -> Sdk: stopRecord
+
+loop fetchAndSend while audio data not empty
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+Sdk -> Server: closeWebSocket
+Server --> Sdk: closed
+Sdk -> App: callback("", FINISH)
+deactivate Sdk
 deactivate Sdk
 
 @enduml
