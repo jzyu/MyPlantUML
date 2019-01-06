@@ -1,0 +1,50 @@
+' websocket
+
+@startuml
+actor User
+participant App
+participant AudioSdk as Sdk
+participant AudioServer as Server
+
+App -> App: initSdk \nsetCookie
+
+User -> App: pushToTalk
+App -> Sdk: apiRealTimeRecord
+
+Sdk -> Sdk: beginRecord
+Sdk -> Server: connectWebSocket
+Server --> Sdk: connected
+
+loop fetchAndSend while audio data not empty
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+
+... RECORDING ...
+User -> App: releaseEndTalk
+App -> Sdk: apiStopRecord
+Sdk -> Sdk: stopRecord
+
+loop fetchAndSend while audio data not empty
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+Sdk -> Server: closeWebSocket
+Server --> Sdk: closed
+Sdk -> App: callback("", FINISH)
+
+@enduml
