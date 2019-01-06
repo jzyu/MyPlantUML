@@ -1,0 +1,62 @@
+序列图： Http正常收发
+
+@startuml
+actor User
+participant App
+participant AudioSdk as Sdk
+participant AudioServer as Server
+
+App -> App: initSdk
+App -> App: setCookie
+
+User -> App: pushToTalk
+activate App
+App -> Sdk: apiRealTimeRecord
+
+activate Sdk
+Sdk -> Sdk: beginRecord
+Sdk -> Server: connectWebSocket
+Sdk <-- Server: connectFailed
+
+|||
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData first
+activate Sdk #red
+Sdk <-- Server: SUCCESS
+Sdk -> App: callback(text, SUCCESS)
+
+loop fetchAndSend while audio data not empty / MultiThread concurrency
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+
+... RECORDING ...
+User -> App: releaseEndTalk
+App -> Sdk: apiStopRecord
+deactivate App
+Sdk -> Sdk: stopRecord
+
+loop fetchAndSend while audio data not empty / MultiThread concurrency
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+
+Sdk -> App: callback("", FINISH)
+deactivate Sdk
+deactivate Sdk
+
+@enduml
