@@ -1,0 +1,106 @@
+序列图： full story with Http Cookie Expired
+
+# 新增api: provideCookieGetter(CookieGetter getter)
+  // sdk要求app实现此接口
+  interface CookieGetter {
+      void getCookieAsync(CookieGetCallback cb);
+
+      interface CookieGetCallback {
+          // if get cookie failed, set cookie param as NULL
+          void onGet(String cookie);
+      }
+  }
+
+  // app 实现
+  new CookieGetter() {
+      @override
+      void getCookieAsync(final Callback cb) {
+          lark.autoLogin(new LarkLoginCallback loginCb() {
+               @override
+               void onLogin() {
+                   String cookie = CookieUtil.getCookie(HttpUtil.getDomainUrl());
+                   cb.onGet(cookie);
+               }
+          };
+      }
+  };
+
+# SDK 上报 ERROR_SERVICE_NOT_AVAILABLE 以后，将直接丢弃音频数据，避免空耗太多内存
+
+# errorCode: ERROR_FAILED_XXX 失败后无法恢复，直接丢弃音频数据，避免空耗内存
+ ERROR_SNIPPED // app忽略即可
+ ERROR_FAILED_NETWORK // 失败
+ ERROR_FAILED_COOKIE  // 失败
+
+# FINISH 可能不会上报
+
+@startuml
+actor User
+participant App
+participant AudioSdk as Sdk
+participant AudioServer as Server
+
+App -> Sdk: initSdk
+Sdk -> Sdk: cookieGetter.getCookieAsync
+
+User -> App: pushToTalk
+activate App
+App -> Sdk: apiRealTimeRecord
+
+activate Sdk
+Sdk -> Sdk: beginRecord
+Sdk -> Server: connectWebSocket
+Sdk <-- Server: connectFailed
+
+|||
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData first
+
+alt ERROR_COOKIE_EXPIRED
+    Sdk <-- Server: ERROR_COOKIE_EXPIRED
+    Sdk -> Sdk: cookieGetter.getCookieAsync(CookieGetCallback)
+    Sdk --> Sdk: onGet(newCookie)
+    alt newCookie is NULL
+        Sdk -> App: callback("", ERROR_COOKIE_EXPIRED);
+    else
+        Sdk -> Sdk: fetchAudioData
+        Sdk -> Server: http sendData first
+    end
+end
+
+
+loop fetchAndSend while audio data not empty / MultiThread concurrency
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+
+... RECORDING ...
+User -> App: releaseEndTalk
+App -> Sdk: apiStopRecord
+deactivate App
+Sdk -> Sdk: stopRecord
+
+loop fetchAndSend while audio data not empty / MultiThread concurrency
+Sdk -> Sdk: fetchAudioData
+Sdk -> Server: http sendData
+    alt when success
+    Server --> Sdk: textResult
+    Sdk -> App: callback(text, SUCCESS)
+    else when failed
+    Server --> Sdk: errorMessage
+    Sdk -> App: callback(errMsg, ERROR_SNIPPET)
+    end
+end
+
+Sdk -> App: callback("", FINISH)
+'deactivate Sdk
+deactivate Sdk
+
+@enduml

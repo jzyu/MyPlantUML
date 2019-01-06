@@ -1,4 +1,11 @@
-序列图： Http正常收发
+序列图： full story with Http Cookie Expired
+
+# App刷新Cookie(处理ERROR_COOKIE_EXPIRED)需要注意：
+ 1.如刷新无法成功，需要调用api stopRecord终止录音
+ 2.避免死循环：过程中如果SDK再报错ERROR_COOKIE_EXPIRED，不做处理
+
+# SDK 上报 ERROR_SERVICE_NOT_AVAILABLE 以后，将直接丢弃音频数据，避免空耗太多内存
+
 
 @startuml
 actor User
@@ -19,11 +26,22 @@ Sdk -> Server: connectWebSocket
 Sdk <-- Server: connectFailed
 
 |||
+loop until not ERROR_COOKIE_EXPIRED
 Sdk -> Sdk: fetchAudioData
 Sdk -> Server: http sendData first
-activate Sdk #red
-Sdk <-- Server: SUCCESS
-Sdk -> App: callback(text, SUCCESS)
+    Sdk <-- Server: ERROR_COOKIE_EXPIRED
+    alt errorCount < 3
+        Sdk -> App: callback("", ERROR_COOKIE_EXPIRED)
+        App -> App: getLatestCookie(eg: Lark.autoLogin)
+        App -> Sdk: setCookie
+        App -> Sdk: apiRealTimeRecord
+        Sdk -> Sdk: fetchAudioData
+        Sdk -> Server: http sendData first
+    else errorCount >= 3
+        Sdk -> App: callback("", ERROR_SERVICE_NOT_AVAILABLE)
+    end
+end
+
 
 loop fetchAndSend while audio data not empty / MultiThread concurrency
 Sdk -> Sdk: fetchAudioData
@@ -56,7 +74,7 @@ Sdk -> Server: http sendData
 end
 
 Sdk -> App: callback("", FINISH)
-deactivate Sdk
+'deactivate Sdk
 deactivate Sdk
 
 @enduml

@@ -9,8 +9,8 @@ participant App
 participant AudioSdk as Sdk
 participant AudioServer as Server
 
-App -> App: initSdk
-App -> App: setCookie
+App -> Sdk: initSdk
+App -> Sdk: setCookie
 
 User -> App: pushToTalk
 activate App
