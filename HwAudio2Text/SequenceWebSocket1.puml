@@ -6,11 +6,14 @@ participant App
 participant AudioSdk as Sdk
 participant AudioServer as Server
 
+activate App
 App -> App: initSdk \nsetCookie
+deactivate App
 
 User -> App: pushToTalk
 App -> Sdk: apiRealTimeRecord
 
+activate Sdk
 Sdk -> Sdk: beginRecord
 Sdk -> Server: connectWebSocket
 Server --> Sdk: connected
@@ -46,5 +49,6 @@ end
 Sdk -> Server: closeWebSocket
 Server --> Sdk: closed
 Sdk -> App: callback("", FINISH)
+deactivate Sdk
 
 @enduml
